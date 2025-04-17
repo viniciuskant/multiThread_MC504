@@ -65,7 +65,3 @@ Total de moléculas H₂O formadas: 33
 
 - **Número de threads**: Altere a constante `NUM_THREADS` para modificar a quantidade de átomos simulados.
 - **Velocidade da simulação**: Ajuste os valores de `usleep` para alterar o tempo de espera entre eventos.
-
-## Observações
-
-Este programa é uma simulação educacional e demonstra conceitos de sincronização em sistemas concorrentes. Ele não reflete processos químicos reais.  
