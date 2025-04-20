@@ -23,12 +23,14 @@ void clear_line() {
 }
 
 void print_atom(char type, int id, const char* action) {
+    // função para imprimir um atomo que acabou de chegar à pool
     const char* color = (type == 'O') ? "\033[1;34m" : "\033[1;33m";
     printf("%s● %c%d %s\033[0m", color, type, id, action);
     fflush(stdout);
 }
 
 void animate_bonding(int id) {
+    // função para animar a formação da molécula H₂O
     pthread_mutex_lock(&print_mutex);
     const char* frames[] = {"⏳", "⚡", "💧"};
     for (int i = 0; i < 3; i++) {
@@ -48,15 +50,20 @@ void bond(char atom_type, int id) {
 }
 
 void* oxygen(void* arg) {
+    // função para thread que representa o átomo de oxigênio específico
     int id = *((int*)arg);
     
     sem_wait(&mutex);
     oxygen_count++;
+
+    // controla o fluxo de print referente à oxigênio na pool
     pthread_mutex_lock(&print_mutex);
     print_atom('O', id, "chegou ao pool\n");
     pthread_mutex_unlock(&print_mutex);
 
+    // verifica se há hidrogênio suficiente para formar uma molécula
     if (hydrogen_count >= 2) {
+        // libera dois hidrogênios e um oxigênio da fila
         sem_post(&hydrogen_queue);
         sem_post(&hydrogen_queue);
         hydrogen_count -= 2;
@@ -71,21 +78,27 @@ void* oxygen(void* arg) {
         sem_post(&mutex);
     }
     
+    // barreira de sincronização para formação da molécula
     sem_wait(&oxygen_queue);
-    sem_post(&mutex);
+    sem_post(&mutex);   // apenas o oxigênio libera o mutex, pois é o elemento não-duplicado da molécula
     return NULL;
 }
 
 void* hydrogen(void* arg) {
+    // função para thread que representa o átomo de hidrogênio específico
     int id = *((int*)arg);
     
     sem_wait(&mutex);
     hydrogen_count++;
+
+    // controla o fluxo de print referente à hidrogênio na pool
     pthread_mutex_lock(&print_mutex);
     print_atom('H', id, "chegou ao pool\n");
     pthread_mutex_unlock(&print_mutex);
 
+    // verifica se há oxigênio suficiente para formar uma molécula
     if (hydrogen_count >= 2 && oxygen_count >= 1) {
+        // libera dois hidrogênios e um oxigênio da fila
         sem_post(&hydrogen_queue);
         sem_post(&hydrogen_queue);
         hydrogen_count -= 2;
@@ -155,6 +168,8 @@ int main() {
         usleep(100000 + rand() % 100000);
     }
 
+    // libera os semáforos para permitir que os atomos não utilizados sejam processados
+    // garante que o programa possa terminar mesmo que não haja mais moléculas a serem formadas 
     for (int i = 0; i < NUM_THREADS; i++) {
         sem_post(&oxygen_queue);
         sem_post(&hydrogen_queue);
