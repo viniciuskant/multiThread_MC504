@@ -11,6 +11,7 @@
 sem_t mutex;          // Para exclusão mútua
 sem_t oxygen_queue;   // Oxigênio esperando
 sem_t hydrogen_queue; // Hidrogênio esperando
+pthread_mutex_t print_mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex para impressão
 
 int oxygen_count = 0; // Oxigênios esperando
 int hydrogen_count = 0; // Hidrogênios esperando
@@ -28,15 +29,17 @@ void print_atom(char type, int id, const char* action) {
 }
 
 void animate_bonding(int id) {
+    pthread_mutex_lock(&print_mutex);
     const char* frames[] = {"⏳", "⚡", "💧"};
     for (int i = 0; i < 3; i++) {
         clear_line();
-        printf("\033[1;32mFormando molécula H₂O #%d %s\033[0m", id, frames[i]);
+        printf("\033[1;32mFormando molécula H₂O #%d %s\033[0m\n", id, frames[i]);
         fflush(stdout);
         usleep(200000);
     }
     clear_line();
     printf("\033[1;32m✔ Molécula H₂O #%d formada!\033[0m\n", id);
+    pthread_mutex_unlock(&print_mutex);
 }
 
 void bond(char atom_type, int id) {
@@ -49,8 +52,10 @@ void* oxygen(void* arg) {
     
     sem_wait(&mutex);
     oxygen_count++;
+    pthread_mutex_lock(&print_mutex);
     print_atom('O', id, "chegou ao pool\n");
-    
+    pthread_mutex_unlock(&print_mutex);
+
     if (hydrogen_count >= 2) {
         sem_post(&hydrogen_queue);
         sem_post(&hydrogen_queue);
@@ -58,14 +63,15 @@ void* oxygen(void* arg) {
         sem_post(&oxygen_queue);
         oxygen_count--;
         molecules_formed++;
+        pthread_mutex_lock(&print_mutex);
+        bond('O', id);
+        pthread_mutex_unlock(&print_mutex);
         animate_bonding(molecules_formed);
     } else {
         sem_post(&mutex);
     }
     
     sem_wait(&oxygen_queue);
-    bond('O', id);
-    
     sem_post(&mutex);
     return NULL;
 }
@@ -75,8 +81,10 @@ void* hydrogen(void* arg) {
     
     sem_wait(&mutex);
     hydrogen_count++;
+    pthread_mutex_lock(&print_mutex);
     print_atom('H', id, "chegou ao pool\n");
-    
+    pthread_mutex_unlock(&print_mutex);
+
     if (hydrogen_count >= 2 && oxygen_count >= 1) {
         sem_post(&hydrogen_queue);
         sem_post(&hydrogen_queue);
@@ -84,18 +92,20 @@ void* hydrogen(void* arg) {
         sem_post(&oxygen_queue);
         oxygen_count--;
         molecules_formed++;
+        pthread_mutex_lock(&print_mutex);
+        bond('H', id);
+        pthread_mutex_unlock(&print_mutex);
         animate_bonding(molecules_formed);
     } else {
         sem_post(&mutex);
     }
     
     sem_wait(&hydrogen_queue);
-    bond('H', id);
-    
     return NULL;
 }
 
 void print_pool_status() {
+    pthread_mutex_lock(&print_mutex);
     printf("\n\033[1;36m═══ Pool de Átomos ═══\033[0m\n");
     
     printf("\033[1;34mO: ");
@@ -115,6 +125,7 @@ void print_pool_status() {
     }
     
     printf("\033[1;36m══════════════════════\033[0m\n\n");
+    pthread_mutex_unlock(&print_mutex);
 }
 
 int main() {
@@ -143,6 +154,11 @@ int main() {
         print_pool_status();
         usleep(100000 + rand() % 100000);
     }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        sem_post(&oxygen_queue);
+        sem_post(&hydrogen_queue);
+    }
     
     for (int i = 0; i < NUM_THREADS; i++) {
         pthread_join(threads[i], NULL);
@@ -151,6 +167,9 @@ int main() {
     sem_destroy(&mutex);
     sem_destroy(&oxygen_queue);
     sem_destroy(&hydrogen_queue);
+    pthread_mutex_destroy(&print_mutex);
+    printf("\033[2J\033[H"); // Limpa a tela
+    print_pool_status();
     
     printf("\n\033[1;35m=== Simulação concluída! ===\033[0m\n");
     printf("\033[1;32mTotal de moléculas H₂O formadas: %d\033[0m\n", molecules_formed);
